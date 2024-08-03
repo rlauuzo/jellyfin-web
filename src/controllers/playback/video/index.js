@@ -538,9 +538,6 @@ export default function (view) {
         secureFetch(`/Episode/${item.Id}/IntroSkipperSegments`).then(segments => {
             skipSegments = segments;
         }).catch(err => { skipSegments = {}; });
-    }
-
-    function getIntroConfig() {
         secureFetch(`/Intros/UserInterfaceConfiguration`).then(config => {
             skipButton.dataset.Introduction = config.SkipButtonIntroText;
             skipButton.dataset.Credits = config.SkipButtonEndCreditsText;
@@ -620,7 +617,6 @@ export default function (view) {
         const player = this;
         onStateChanged.call(player, e, state);
         resetUpNextDialog();
-        getIntroConfig();
     }
 
     function resetUpNextDialog() {
