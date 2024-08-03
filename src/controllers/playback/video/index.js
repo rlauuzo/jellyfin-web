@@ -365,7 +365,7 @@ export default function (view) {
             toggleSubtitleSync('hide');
 
             // Firefox does not blur by itself
-            if (document.activeElement) {
+            if (document.activeElement && !skipButton.contains(document.activeElement)) {
                 document.activeElement.blur();
             }
         }
@@ -517,7 +517,89 @@ export default function (view) {
             updatePlaylist();
             enableStopOnBack(true);
             updatePlaybackRate(player);
+            getIntroTimestamps(state.NowPlayingItem);
         }
+    }
+
+    function secureFetch(url) {
+        const apiClient = ServerConnections.currentApiClient();
+        const address = apiClient.serverAddress();
+        const reqInit = {
+            headers: {
+                "Authorization": `MediaBrowser Token=${apiClient.accessToken()}`
+            }
+        };
+        return fetch(`${address}${url}`, reqInit).then(r => {
+            return r.ok ? r.json() : null;
+        });
+    }
+
+    function getIntroTimestamps(item) {
+        secureFetch(`/Episode/${item.Id}/IntroSkipperSegments`).then(segments => {
+            skipSegments = segments;
+        }).catch(err => { skipSegments = {}; });
+    }
+
+    function getIntroConfig() {
+        secureFetch(`/Intros/UserInterfaceConfiguration`).then(config => {
+            skipButton.dataset.Introduction = config.SkipButtonIntroText;
+            skipButton.dataset.Credits = config.SkipButtonEndCreditsText;
+        }).catch(err => { 
+            skipButton.dataset.Introduction = 'skip';
+            skipButton.dataset.Credits = 'skip'; });
+    }
+
+    function getCurrentSegment(position) {
+        for (const [key, segment] of Object.entries(skipSegments)) {
+            if ((position > segment.ShowSkipPromptAt && position < segment.HideSkipPromptAt - 1) || 
+                (currentVisibleMenu === 'osd' && position > segment.IntroStart && position < segment.IntroEnd - 1)) {
+                segment.SegmentType = key;
+                return segment;
+            }
+        }
+        return { SegmentType: "None" };
+    }
+
+    function videoPositionChanged() {
+        const embyButton = skipButton.querySelector(".emby-button");
+        const segmentType = getCurrentSegment(playbackManager.currentTime(currentPlayer) / 1000).SegmentType;
+        if (segmentType === "None") {
+            if (!skipButton.classList.contains('show')) return;
+            skipButton.classList.remove('show');
+            embyButton.addEventListener("transitionend", () => {
+                skipButton.classList.add("hide");
+                embyButton.blur();
+            }, { once: true });
+            return;
+        }
+        skipButton.querySelector("#btnSkipSegmentText").textContent = skipButton.dataset[segmentType];
+        if (!skipButton.classList.contains("hide")) {
+            if (currentVisibleMenu !== 'osd' && !embyButton.contains(document.activeElement)) _focus(embyButton);
+            return;
+        }
+        requestAnimationFrame(() => {
+            skipButton.classList.remove("hide");
+            requestAnimationFrame(() => {
+                skipButton.classList.add('show');
+                _focus(embyButton);
+            });
+        });
+    }
+
+    function doSkip() {
+        const segment = getCurrentSegment(playbackManager.currentTime(currentPlayer) / 1000);
+        if (segment.SegmentType === "None") {
+            console.warn("[intro skipper] doSkip() called without an active segment");
+            return;
+        }
+        playbackManager.seek(segment.IntroEnd * TICKS_PER_SECOND, currentPlayer);
+    }
+
+    function eventHandler(e) {
+        if (e.key !== "Enter") return;
+        e.stopPropagation();
+        e.preventDefault();
+        doSkip();
     }
 
     function onPlayPauseStateChanged() {
@@ -538,6 +620,7 @@ export default function (view) {
         const player = this;
         onStateChanged.call(player, e, state);
         resetUpNextDialog();
+        getIntroConfig();
     }
 
     function resetUpNextDialog() {
@@ -637,6 +720,7 @@ export default function (view) {
                 const item = currentItem;
                 refreshProgramInfoIfNeeded(player, item);
                 showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks);
+                videoPositionChanged();
             }
         }
     }
@@ -1543,7 +1627,9 @@ export default function (view) {
     let programEndDateMs = 0;
     let playbackStartTimeTicks = 0;
     let subtitleSyncOverlay;
+    let skipSegments = {};
     let trickplayResolution = null;
+    const skipButton = document.querySelector(".skipIntro");
     const nowPlayingVolumeSlider = view.querySelector('.osdVolumeSlider');
     const nowPlayingVolumeSliderContainer = view.querySelector('.osdVolumeSliderContainer');
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
@@ -1854,6 +1940,8 @@ export default function (view) {
     });
     view.querySelector('.btnAudio').addEventListener('click', showAudioTrackSelection);
     view.querySelector('.btnSubtitles').addEventListener('click', showSubtitleTrackSelection);
+    skipButton.addEventListener('click', doSkip);
+    skipButton.addEventListener("keydown", eventHandler);
 
     // HACK: Remove `emby-button` from the rating button to make it look like the other buttons
     view.querySelector('.btnUserRating').classList.remove('emby-button');
@@ -1964,4 +2052,3 @@ export default function (view) {
         });
     }
 }
-
