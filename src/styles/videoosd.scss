@@ -351,10 +351,6 @@
     --rounding: 4px;
     --accent: 0, 164, 220;
 }
-.skipIntro.upNextContainer {
-    width: unset;
-    margin: unset;
-}
 .skipIntro {
     position: absolute;
     bottom: 7.5em;
@@ -383,7 +379,7 @@
     box-shadow: 0 0 8px rgba(var(--accent), 0.6);
     filter: brightness(1.2);
 }
-.skipIntro .emby-button:focus:not(:focus-visible) {
+.skipIntro .emby-button:focus {
     background: rgb(var(--accent));
     box-shadow: 0 0 8px rgba(var(--accent), 0.6);
 }

@@ -537,13 +537,16 @@ export default function (view) {
     function getIntroTimestamps(item) {
         secureFetch(`/Episode/${item.Id}/IntroSkipperSegments`).then(segments => {
             skipSegments = segments;
-        }).catch(err => { skipSegments = {}; });
+            hasCreditsSegment = Object.keys(segments).some(key => key === "Credits");
+        }).catch(err => {
+            skipSegments = {}; 
+            hasCreditsSegment = false; });
         secureFetch(`/Intros/UserInterfaceConfiguration`).then(config => {
             skipButton.dataset.Introduction = config.SkipButtonIntroText;
             skipButton.dataset.Credits = config.SkipButtonEndCreditsText;
-        }).catch(err => { 
-            skipButton.dataset.Introduction = 'skip';
-            skipButton.dataset.Credits = 'skip'; });
+        }).catch(err => {
+            skipButton.dataset.Introduction = 'Skip Intro';
+            skipButton.dataset.Credits = 'Next'; });
     }
 
     function getCurrentSegment(position) {
@@ -557,21 +560,25 @@ export default function (view) {
         return { SegmentType: "None" };
     }
 
-    function videoPositionChanged() {
+    function videoPositionChanged(currentTime) {
         const embyButton = skipButton.querySelector(".emby-button");
-        const segmentType = getCurrentSegment(playbackManager.currentTime(currentPlayer) / 1000).SegmentType;
+        const segmentType = getCurrentSegment(currentTime / TICKS_PER_SECOND).SegmentType;
         if (segmentType === "None") {
             if (!skipButton.classList.contains('show')) return;
             skipButton.classList.remove('show');
             embyButton.addEventListener("transitionend", () => {
                 skipButton.classList.add("hide");
-                embyButton.blur();
+                if (!currentVisibleMenu) {
+                    embyButton.blur();
+                } else {
+                    _focus(osdBottomElement.querySelector('.btnPause'));
+                }
             }, { once: true });
             return;
         }
         skipButton.querySelector("#btnSkipSegmentText").textContent = skipButton.dataset[segmentType];
         if (!skipButton.classList.contains("hide")) {
-            if (currentVisibleMenu !== 'osd' && !embyButton.contains(document.activeElement)) _focus(embyButton);
+            if (!currentVisibleMenu && !embyButton.contains(document.activeElement)) _focus(embyButton);
             return;
         }
         requestAnimationFrame(() => {
@@ -716,13 +723,13 @@ export default function (view) {
                 const item = currentItem;
                 refreshProgramInfoIfNeeded(player, item);
                 showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks);
-                videoPositionChanged();
+                videoPositionChanged(currentTime);
             }
         }
     }
 
     function showComingUpNextIfNeeded(player, currentItem, currentTimeTicks, runtimeTicks) {
-        if (runtimeTicks && currentTimeTicks && !comingUpNextDisplayed && !currentVisibleMenu && currentItem.Type === 'Episode' && userSettings.enableNextVideoInfoOverlay()) {
+        if (!hasCreditsSegment && runtimeTicks && currentTimeTicks && !comingUpNextDisplayed && !currentVisibleMenu && currentItem.Type === 'Episode' && userSettings.enableNextVideoInfoOverlay()) {
             let showAtSecondsLeft = 30;
             if (runtimeTicks >= 50 * TICKS_PER_MINUTE) {
                 showAtSecondsLeft = 40;
@@ -1624,6 +1631,7 @@ export default function (view) {
     let playbackStartTimeTicks = 0;
     let subtitleSyncOverlay;
     let skipSegments = {};
+    let hasCreditsSegment;
     let trickplayResolution = null;
     const skipButton = document.querySelector(".skipIntro");
     const nowPlayingVolumeSlider = view.querySelector('.osdVolumeSlider');
@@ -1781,6 +1789,10 @@ export default function (view) {
     let lastPointerDown = 0;
     /* eslint-disable-next-line compat/compat */
     dom.addEventListener(view, window.PointerEvent ? 'pointerdown' : 'click', function (e) {
+        if (dom.parentWithClass(e.target, ['btnSkipIntro'])) {
+            return;
+        }
+
         if (dom.parentWithClass(e.target, ['videoOsdBottom', 'upNextContainer'])) {
             showOsd();
             return;
