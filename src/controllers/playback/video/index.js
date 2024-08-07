@@ -568,7 +568,11 @@ export default function (view) {
             skipButton.classList.remove('show');
             embyButton.addEventListener("transitionend", () => {
                 skipButton.classList.add("hide");
-                embyButton.blur();
+                if (!currentVisibleMenu) {
+                    embyButton.blur();
+                } else {
+                    _focus(osdBottomElement.querySelector('.btnPause'));
+                }
             }, { once: true });
             return;
         }
@@ -592,7 +596,14 @@ export default function (view) {
             console.warn("[intro skipper] doSkip() called without an active segment");
             return;
         }
-        playbackManager.seek(segment.IntroEnd * TICKS_PER_SECOND, currentPlayer);
+        const introEndTicks = segment.IntroEnd * TICKS_PER_SECOND;
+        if (currentRuntimeTicks - introEndTicks < 3 * TICKS_PER_SECOND) {
+            playbackManager.nextItem(currentPlayer)
+                .then(() => playbackManager.nextTrack(currentPlayer))
+                .catch(() => playbackManager.seek(introEndTicks, currentPlayer));
+        } else {
+            playbackManager.seek(introEndTicks, currentPlayer);
+        }
     }
 
     function eventHandler(e) {
