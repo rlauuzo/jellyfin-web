@@ -539,7 +539,7 @@ export default function (view) {
             skipSegments = segments;
             hasCreditsSegment = Object.keys(segments).some(key => key === "Credits");
         }).catch(err => {
-            skipSegments = {}; 
+            skipSegments = {};
             hasCreditsSegment = false; });
         secureFetch(`/Intros/UserInterfaceConfiguration`).then(config => {
             skipButton.dataset.Introduction = config.SkipButtonIntroText;
@@ -551,7 +551,7 @@ export default function (view) {
 
     function getCurrentSegment(position) {
         for (const [key, segment] of Object.entries(skipSegments)) {
-            if ((position > segment.ShowSkipPromptAt && position < segment.HideSkipPromptAt - 1) || 
+            if ((position > segment.ShowSkipPromptAt && position < segment.HideSkipPromptAt - 1) ||
                 (currentVisibleMenu === 'osd' && position > segment.IntroStart && position < segment.IntroEnd - 1)) {
                 segment.SegmentType = key;
                 return segment;
